@@ -5,7 +5,7 @@ use std::f64;
 
 /// Determine types of activation functions contained in this module.
 #[allow(dead_code)]
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Type {
     Sigmoid,
     Tanh,

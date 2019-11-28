@@ -91,6 +91,6 @@ pub fn to_json<T: serde::Serialize>(obj: &T) -> Result<String, ErrorKind> {
 }
 
 /// Function for deserializing of JSON to NN struct
-pub fn from_json(s: &str){
+pub fn from_json(_s: &str){
 
 }

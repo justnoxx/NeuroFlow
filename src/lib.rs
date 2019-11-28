@@ -139,7 +139,7 @@ pub enum ErrorKind {
     IO(std::io::Error),
     Encoding(bincode::Error),
     Json(serde_json::Error),
-    StdError(Box<std::error::Error>)
+    StdError(Box<dyn std::error::Error>)
 }
 
 /// The struct that points different fields of network.
@@ -182,6 +182,7 @@ struct Layer {
 /// This struct is a container for chosen activation function and its derivative.
 /// It is useful when in network's serialization in order to skip function
 /// in serialization
+#[derive(Debug)]
 struct ActivationContainer{
     func: fn(f64) -> f64,
     der: fn(f64) -> f64
@@ -252,10 +253,10 @@ pub struct FeedForward {
     momentum: f64,
     error: f64,
 
-    act_type: activators::Type,
+    act_type: Vec<activators::Type>,
 
     #[serde(skip_deserializing, skip_serializing)]
-    act: ActivationContainer
+    act: Vec<ActivationContainer>
 }
 
 impl Layer {
@@ -320,8 +321,8 @@ impl FeedForward {
     pub fn new(architecture: &[i32]) -> FeedForward {
         let mut nn = FeedForward {learn_rate: 0.1, momentum: 0.1, error: 0.0,
             layers: Vec::new(),
-            act: ActivationContainer{func: activators::tanh, der: activators::der_tanh},
-            act_type: activators::Type::Tanh};
+            act: vec![ActivationContainer{func: activators::tanh, der: activators::der_tanh}],
+            act_type: vec![activators::Type::Tanh]};
 
         for i in 1..architecture.len() {
             nn.layers.push(Layer::new(architecture[i], architecture[i - 1]))
@@ -341,7 +342,7 @@ impl FeedForward {
                         sum += self.layers[j].w[i][k] * x[k];
                     }
                     self.layers[j].v[i] = sum;
-                    self.layers[j].y[i] = (self.act.func)(sum);
+                    self.layers[j].y[i] = (self.act.get(j).unwrap().func)(sum);
                 }
             }
             else if j == self.layers.len() - 1{
@@ -361,7 +362,7 @@ impl FeedForward {
                         sum += self.layers[j].w[i][k + 1] * self.layers[j - 1].y[k];
                     }
                     self.layers[j].v[i] = sum;
-                    self.layers[j].y[i] = (self.act.func)(sum);
+                    self.layers[j].y[i] = (self.act.get(j).unwrap().func)(sum);
                 }
             }
         }
@@ -375,7 +376,7 @@ impl FeedForward {
             if j == self.layers.len() - 1{
                 self.error = 0.0;
                 for i in 0..self.layers[j].y.len(){
-                    self.layers[j].delta[i] = (d[i] - self.layers[j].y[i])* (self.act.der)(self.layers[j].v[i]);
+                    self.layers[j].delta[i] = (d[i] - self.layers[j].y[i])* (self.act.get(j).unwrap().der)(self.layers[j].v[i]);
                     self.error += 0.5 * (d[i] - self.layers[j].y[i]).powi(2);
                 }
             } else {
@@ -384,7 +385,7 @@ impl FeedForward {
                     for k in 0..self.layers[j + 1].delta.len(){
                         sum += self.layers[j + 1].delta[k] * self.layers[j + 1].w[k][i + 1];
                     }
-                    self.layers[j].delta[i] = (self.act.der)(self.layers[j].v[i]) * sum;
+                    self.layers[j].delta[i] = (self.act.get(j).unwrap().der)(self.layers[j].v[i]) * sum;
                 }
             }
         }
@@ -509,6 +510,15 @@ impl FeedForward {
         &self.layers[self.layers.len() - 1].y
     }
 
+    // This function describes neural network
+    pub fn describe_network(&self) -> () {
+        println!("This neural network has {:#?} layers, activator types: {:#?}, activators: {:#?}",
+                 self.layers.len(),
+                 self.act_type,
+                 self.act
+        );
+        
+    }
     /// Choose activation function. `Note` that if you pass `activators::Type::Custom`
     /// as argument of this method, the default value (`activators::Type::Tanh`) will
     /// be used.
@@ -516,22 +526,46 @@ impl FeedForward {
     /// * `func: neuroflow::activators::Type` - enum element that indicates which
     /// function to use;
     /// * `return -> &mut FeedForward` - link on the current struct.
-    pub fn activation(&mut self, func: activators::Type) -> &mut FeedForward{
-        match func{
-            activators::Type::Sigmoid => {
-                self.act_type = activators::Type::Sigmoid;
-                self.act.func = activators::sigm;
-                self.act.der = activators::der_sigm;
-            }
-            activators::Type::Tanh | activators::Type::Custom => {
-                self.act_type = activators::Type::Tanh;
-                self.act.func = activators::tanh;
-                self.act.der = activators::der_tanh;
-            }
-            activators::Type::Relu => {
-                self.act_type = activators::Type::Relu;
-                self.act.func = activators::relu;
-                self.act.der = activators::der_relu;
+    // pub fn activation(&mut self, func: activators::Type) -> &mut FeedForward{
+    pub fn activation(&mut self, activators_vector: Vec<activators::Type>) -> &mut FeedForward {
+        if activators_vector.len() != self.layers.len() {
+            panic!("Activation functions vector length ({}) should be the same as layers count({}).", activators_vector.len(), self.layers.len());
+        }
+        
+        for func in activators_vector {
+            match func {
+                activators::Type::Sigmoid => {
+                    self.act_type.push(activators::Type::Sigmoid);
+                    let t_acc = ActivationContainer {
+                        func: activators::sigm,
+                        der: activators::der_sigm
+                    };
+                    self.act.push(t_acc);
+                    // self.act.func = 
+                    // self.act.der = activators::der_sigm;
+                }
+                activators::Type::Tanh | activators::Type::Custom => {
+                    self.act_type.push(activators::Type::Tanh);
+
+                    let t_acc = ActivationContainer {
+                        func: activators::tanh,
+                        der: activators::der_tanh
+                    };
+                    self.act.push(t_acc);
+                    // self.act.func = activators::tanh;
+                    // self.act.der = activators::der_tanh;
+                }
+                activators::Type::Relu => {
+                    self.act_type.push(activators::Type::Relu);
+
+                    let t_acc = ActivationContainer {
+                        func: activators::relu,
+                        der: activators::der_relu
+                    };
+                    self.act.push(t_acc);
+                    // self.act.func = activators::relu;
+                    // self.act.der = activators::der_relu;
+                }
             }
         }
         self
@@ -565,15 +599,18 @@ impl FeedForward {
     /// let mut nn = FeedForward::new(&[1, 3, 2]);
     /// nn.custom_activation(sigmoid, der_sigmoid);
     /// ```
-    pub fn custom_activation(&mut self, func: fn(f64) -> f64, der: fn(f64) -> f64) -> &mut FeedForward{
-        self.act_type = activators::Type::Custom;
 
-        self.act.func = func;
-        self.act.der = der;
+    // FIXME: fix custom activation
+    // pub fn custom_activation(&mut self, func: fn(f64) -> f64, der: fn(f64) -> f64) -> &mut FeedForward{
+    //     self.act_type = activators::Type::Custom;
 
-        self
-    }
+    //     self.act.func = func;
+    //     self.act.der = der;
 
+    //     self
+    // }
+    // end of custom activation.
+    
     /// Set the learning rate of network.
     ///
     /// * `learning_rate: f64` - learning rate;
@@ -618,21 +655,44 @@ impl FeedForward {
 
 impl Transform for FeedForward{
     fn after(&mut self){
-        match self.act_type {
-            activators::Type::Sigmoid => {
-                self.act_type = activators::Type::Sigmoid;
-                self.act.func = activators::sigm;
-                self.act.der = activators::der_sigm;
-            }
-            activators::Type::Tanh | activators::Type::Custom => {
-                self.act_type = activators::Type::Tanh;
-                self.act.func = activators::tanh;
-                self.act.der = activators::der_tanh;
-            }
-            activators::Type::Relu => {
-                self.act_type = activators::Type::Relu;
-                self.act.func = activators::relu;
-                self.act.der = activators::der_relu;
+        let act_types = self.act_type.clone();
+        for at in act_types {
+            match at {
+                activators::Type::Sigmoid => {
+                    self.act_type.push(activators::Type::Sigmoid);
+
+                    let t_acc = ActivationContainer {
+                        func: activators::sigm,
+                        der: activators::der_sigm
+                    };
+                    self.act.push(t_acc);
+
+                    // self.act.func = activators::sigm;
+                    // self.act.der = activators::der_sigm;
+
+                }
+                activators::Type::Tanh | activators::Type::Custom => {
+                    self.act_type.push(activators::Type::Tanh);
+
+                    let t_acc = ActivationContainer {
+                        func: activators::tanh,
+                        der: activators::der_tanh
+                    };
+                    self.act.push(t_acc);
+                    // self.act.func = activators::tanh;
+                    // self.act.der = activators::der_tanh;
+                }
+                activators::Type::Relu => {
+                    self.act_type.push(activators::Type::Relu);
+
+                    let t_acc = ActivationContainer {
+                        func: activators::tanh,
+                        der: activators::der_tanh
+                    };
+                    self.act.push(t_acc);
+                    // self.act.func = activators::relu;
+                    // self.act.der = activators::der_relu;
+                }
             }
         }
     }

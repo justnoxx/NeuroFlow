@@ -9,7 +9,7 @@ use rand;
 use rand::distributions::range::Range;
 use rand::distributions::IndependentSample;
 use csv;
-use FeedForward;
+// use FeedForward;
 
 /// Trait for getting specific element from set.
 ///
@@ -117,7 +117,7 @@ impl DataSet {
     ///     println!("{:?}", data);
     /// }
     /// ```
-    pub fn from_csv(file_path: &str) -> Result<DataSet, Box<std::error::Error>> {
+    pub fn from_csv(file_path: &str) -> Result<DataSet, Box<dyn std::error::Error>> {
         let mut file = csv::ReaderBuilder::new()
             .has_headers(false)
             .from_path(file_path)?;
@@ -317,24 +317,26 @@ impl DataSet {
         rnd_range.ind_sample(&mut rand::thread_rng())
     }
 
-    /// Don't use this method. It is only for me and will be deleted
-    /// as soon as possible
-    pub fn cv(&self, nn: &mut FeedForward) -> f64 {
-        let mut error: Vec<f64> = vec![0.0; self.y[0].len()];
+    // Don't use this method. It is only for me and will be deleted
+    // as soon as possible
+    
+    // pub fn cv(&self, nn: &mut FeedForward) -> f64 {
+    //     let mut error: Vec<f64> = vec![0.0; self.y[0].len()];
 
-        for i in 0..self.ty.len(){
-            let res = nn.calc(&self.tx[i]);
+    //     for i in 0..self.ty.len(){
+    //         let res = nn.calc(&self.tx[i]);
 
-            for j in 0..self.ty[i].len(){
-                error[j] += (self.ty[i][j] - res[j]).abs();
-            }
-        }
+    //         for j in 0..self.ty[i].len(){
+    //             error[j] += (self.ty[i][j] - res[j]).abs();
+    //         }
+    //     }
 
-        let len = self.ty.len() as f64;
+    //     let len = self.ty.len() as f64;
 
-        error.iter().map(|x| x / len).collect::<Vec<f64>>();
-        error.iter().sum::<f64>() / len
-    }
+    //     error.iter().map(|x| x / len).collect::<Vec<f64>>();
+    //     error.iter().sum::<f64>() / len
+    // }
+    
 }
 
 impl Extractable for DataSet{
